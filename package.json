@@ -1,7 +1,7 @@
 {
   "name": "virality-pro-backend",
   "version": "1.0.0",
-  "description": "Backend Proxy SaaS pour Virality Pro v3",
+  "description": "Backend Proxy SaaS Robuste pour Virality Pro v3",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,14 +10,18 @@
   "keywords": [
     "proxy",
     "gologin",
-    "saas"
+    "saas",
+    "automation"
   ],
   "author": "Virality Pro Team",
   "license": "ISC",
   "dependencies": {
+    "axios": "^1.6.0",
     "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "git": "^0.1.5",
-    "http-proxy-middleware": "^2.0.6"
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
   }
 }
