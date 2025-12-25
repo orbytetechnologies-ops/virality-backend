@@ -4,70 +4,67 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 
-// 1. CONFIGURATION CORS
-// Autorise ton frontend Netlify à communiquer avec ce serveur sans restrictions
+// 1. CONFIGURATION DE BASE
 app.use(cors());
+app.use(express.json()); // INDISPENSABLE pour lire les données POST (Correction Erreur 400)
 
-// 2. LOGGING DE TOUTES LES REQUÊTES ENTRANTES
-// Permet de voir en temps réel dans les logs Render qui appelle ton serveur
+// 2. LOGGING ET VALIDATION DES DONNÉES ENTRANTES
 app.use((req, res, next) => {
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] [INCOMING] ${req.method} ${req.url}`);
+
+    // Si c'est une création d'agent, on vérifie les champs obligatoires
+    if (req.method === 'POST' && req.url.includes('/browser')) {
+        const { name, os, browser } = req.body;
+        const missingFields = [];
+        if (!name) missingFields.push('name');
+        if (!os) missingFields.push('os');
+        if (!browser) missingFields.push('browser');
+
+        if (missingFields.length > 0) {
+            console.error(`[VALIDATION ERROR] Champs manquants pour la création : ${missingFields.join(', ')}`);
+        } else {
+            console.log(`[VALIDATION OK] Création de l'agent : ${name} (${os}/${browser})`);
+        }
+    }
     next();
 });
 
-// 3. ROUTE DE SANTÉ (PING)
-// Utile pour vérifier que le serveur est réveillé sur https://virality-backend.onrender.com/ping
+// 3. ROUTE DE SANTÉ
 app.get('/ping', (req, res) => {
-    res.status(200).send('Virality Pro Engine is LIVE 🚀');
+    res.status(200).send('Virality Engine Online 🚀');
 });
 
-// 4. CONFIGURATION DU PROXY PRINCIPAL
-// Redirige /api/* vers https://api.gologin.com/*
+// 4. PROXY CONFIGURATION (Cerveau du SaaS)
 app.use('/api', createProxyMiddleware({
     target: 'https://api.gologin.com',
     changeOrigin: true,
     pathRewrite: {
-        '^/api': '', // Supprime /api pour correspondre à l'URL GoLogin
+        '^/api': '', 
     },
+    // Correction pour s'assurer que le BODY (JSON) est bien transmis après avoir été lu par express.json()
     onProxyReq: (proxyReq, req, res) => {
-        // Affiche la destination finale pour debug le lancement Cloud
-        console.log(`[PROXYING] ${req.method} ${req.url} -> https://api.gologin.com${proxyReq.path}`);
+        if (req.body && Object.keys(req.body).length) {
+            const bodyData = JSON.stringify(req.body);
+            proxyReq.setHeader('Content-Type', 'application/json');
+            proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+            proxyReq.write(bodyData);
+        }
+        console.log(`[PROXYING] ${req.method} -> https://api.gologin.com${proxyReq.path}`);
     },
     onProxyRes: (proxyRes, req, res) => {
-        // Affiche si GoLogin a accepté ou refusé la requête (ex: 200, 401)
-        console.log(`[PROXY-RESPONSE] ${req.method} ${req.url} Status: ${proxyRes.statusCode}`);
+        console.log(`[PROXY-RESPONSE] Status: ${proxyRes.statusCode} pour ${req.url}`);
     },
     onError: (err, req, res) => {
-        console.error('[PROXY ERROR]', err);
-        res.status(500).json({ 
-            error: 'Proxy communication failure', 
-            message: err.message 
-        });
+        console.error('[PROXY CRITICAL ERROR]', err);
+        res.status(500).json({ error: 'Liaison GoLogin échouée', details: err.message });
     }
 }));
 
-// 5. PROXY DE SECOURS (FALLBACK)
-// Gère les requêtes directes vers /browser si le préfixe /api est oublié
-app.use('/browser', createProxyMiddleware({
-    target: 'https://api.gologin.com/browser',
-    changeOrigin: true,
-    pathRewrite: { '^/browser': '' },
-    onProxyReq: (proxyReq) => console.log(`[FALLBACK] GET -> https://api.gologin.com/browser${proxyReq.path}`)
-}));
-
-// 6. GESTION DES ERREURS 404
-app.use((req, res) => {
-    console.log(`[404 NOT FOUND] ${req.method} ${req.url}`);
-    res.status(404).json({ error: 'Route non trouvée', path: req.url });
-});
-
-// 7. LANCEMENT DU SERVEUR
-// Port dynamique pour Render (10000) ou 8000 en local
+// 5. LANCEMENT
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log('====================================');
-    console.log(`VIRALITY PRO BACKEND ACTIVE ON PORT ${PORT}`);
-    console.log(`TEST PING : /ping`);
+    console.log(`SAAS BACKEND READY ON PORT ${PORT}`);
     console.log('====================================');
 });
